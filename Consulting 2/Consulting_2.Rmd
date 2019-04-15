@@ -1,0 +1,263 @@
+---
+title: "MATH 664 METHODS FOR STATS CONSULTING ASSIGNMENT 2"
+author: "PRITHWISH GANGULY"
+date: "March 28, 2019"
+output: word_document
+---
+### Question 1
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warnings = FALSE)
+```
+
+```{r message = FALSE}
+library(ggplot2) #Visualization function
+library(boot) #Bootstrap function
+```
+
+```{r}
+df <- read.csv("nbahtwt.csv")
+```
+
+This dataset contains 505 observations of Players. The Player data comprises of
+Player Name, Player Pos, Height, Weight, Age, BMI.
+
+#### Relationship between Height, Weight & Position
+```{r}
+jpeg(file="saving_plot1.jpeg")
+ggplot(df, aes(x=Height, y=Weight)) + geom_point(aes(color=Pos)) +
+  geom_smooth(method = 'lm') + 
+  labs(x = "Player Height", y = "Player Weight", color = "Player Position") +
+  ggtitle("Scatterplot of Height vs Weight color coded by Position") + 
+  theme(plot.title = element_text(hjust = 0.5, face="bold"))
+dev.off()
+```
+
+The plot above shows a clear positive linear relationship between player 
+Height and Weight, as seen by the regression line. The strength of the relationship
+can be verified by the correlation matrix below.
+
+```{r}
+cor(df[c(-1,-2,-6)])
+```
+
+Correlation of 0.82 exhibits a very strong linear relationship between the 2
+features.
+
+We also see a clear distribution of Player Position across scatterplot.
+Position G seems to be populated mainly by people in the relatively 
+lower Height and Weight range , whereas Position F is populated by the medium
+Height and Weight range and Position C is mainly populated by the higher Height
+and Weight range.
+
+Maybe BMI (Weight/Height) would be a better metric for our analysis?
+
+#### Player BMI Analysis
+```{r}
+df$BMI <- df$Weight/df$Height
+```
+
+```{r}
+ggplot(df, aes(x=BMI)) + geom_histogram(binwidth = 0.15) + 
+  labs(x = "Player BMI", y = "Count") + ggtitle("Histogram of Player BMI") + 
+  theme(plot.title = element_text(hjust = 0.5, face="bold"))
+```
+
+BMI has an Uniform distribution with a mean of 2.784 and a variance of 0.06107
+
+```{r}
+ggplot(df, aes(x=Pos,y=BMI,fill=Pos)) + geom_boxplot() + 
+  labs(x = "Player Positions", y = "Player BMI") + 
+  ggtitle("Boxplot of Player BMI grouped by Player Position") + 
+  theme(plot.title = element_text(hjust = 0.5, face="bold"))
+```
+
+As in our earlier plot, players in position C have the highest BMI, followed by 
+position F and finally position G has the lowest BMI.
+
+### Player Age Analysis
+```{r}
+ggplot(df, aes(x = Age)) + geom_histogram(binwidth = 2) + 
+  labs(x = "Player Age", y = "Count") + ggtitle("Histogram of Player Age") +
+  theme(plot.title = element_text(hjust = 0.5, face="bold"))
+```
+
+The histogram of Player Age exhibits a slight right-skewed plot. Despite there
+being a lot of players of age 24, the mean gets pulled up due to there being relatively
+a few older players.
+
+**Age Summary Data**:
+```{r}
+summary(df$Age)
+```
+
+```{r}
+uniqv <- unique(df$Age)
+print(paste("Mode = ", uniqv[which.max(tabulate(match(df$Age, uniqv)))]))
+```
+
+The mean, median and mode of Age exhibit the same behaviour since,
+Mode < Median < Mean, which is natural for right-skewed data.
+
+An anomaly we can observe from the Age Summary Data is the minimum Age of a Player.
+The youngest player is a teenager of 15 years, 10 years younger than the average
+player and 25 years younger than the oldest player.
+
+**Features Summary**
+```{r}
+summary(df[-1])
+```
+
+```{r}
+subset(df, df$Age == 15, select = Player:Age)
+```
+
+The 15 year old does seem like a true anomaly, despite being the youngest his weight
+is higher than the median Weight and his height is higher than the median height.
+
+
+### Question 2
+
+```{r}
+df2 <- read.csv("myield.csv")
+```
+
+This dataset contains 18 observations. Mortgage Yield is the quantitative 
+response and the rest are predictors. Below is a preview of the dataset we will 
+now try to model.
+```{r}
+head(df2)
+```
+
+To model and analyze this dataset we must essentially ask ourselves 4 questions:
+
+* Is atleast one of the predictors useful in predicting the response?
+* Do all the predictors help to explain the response, or is only a subset of
+predictors useful?
+* How well does the model fit the data?
+* Given a set of predictor values, what response value should we predict, and
+how accurate is our predictors?
+
+#### Is atleast one of the predictors useful in predicting the response?
+
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ ., data = df2[-1])
+summary(lm.fit)
+```
+
+Since our F-statistic > 1, we can be sure atleast 1 of the predictor is useful in
+predicting the response.
+
+#### Do all the predictors help to explain the response, or is only a subset required?
+
+Here, I have decided to go with Mixed selection method to conduct Variable selection.
+
+We start off by trying out all the variables individually and pick the one with the
+best model fit.
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ Loan, data = df2[-1])
+summary(lm.fit)
+```
+
+Loan gives the best fit when testing with individual variables. It had the highest
+adjusted R^2^ and the lowest RSE.
+
+Now, we need to add variables and monitor the p-value. We will drop any variable
+with a p-value > 0.4.
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ Loan + Distance, data = df2[-1])
+summary(lm.fit)
+```
+
+The addition of Distance gives us a very good improvement in R^2^ and RSE.
+
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ Loan + Distance + Savings.unit, data = df2[-1])
+summary(lm.fit)
+```
+
+Savings.unit doesn't vary our fitness metrics but it is within the p-value bounds,
+so we can keep it.
+
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ Loan + Distance + Savings.unit + Savings.capita,
+             data = df2[-1])
+summary(lm.fit)
+```
+
+Distance has now crossed the p-value bounds, so we drop it.
+
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ Loan + Savings.unit + Savings.capita +
+               Pop.inc, data = df2[-1])
+summary(lm.fit)
+```
+
+Pop.inc crosses the p-value threshold so we drop it.
+
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ Loan + Distance + Savings.unit + Savings.capita +
+               Banks.Mortgage, data = df2[-1])
+summary(lm.fit)
+```
+
+Banks.Mortgage crosses the p-value bounds too, so we drop it.
+
+Applying logic, I decided to apply an interaction term between Loan and Pop.inc
+```{r}
+lm.fit <- lm(Mortgage.Yield ~ Loan + Savings.unit + Savings.capita +
+               I(Loan/Pop.inc), data = df2[-1])
+summary(lm.fit)
+```
+
+We get a far better model fit with high R^2^ and low RSE and our p-values are 
+all statistically significant.
+
+Since our dataset is small, our coefficient estimates maybe have high variance.
+We could use boostrap to get more robust coefficients.
+
+Bootstrap done with 500 bootstrap replicates.
+
+#### Bootstrap Coefficients
+```{r}
+boot.fn <- function(x, index) {
+  coef <- coef(lm(Mortgage.Yield ~ Loan + Savings.unit + Savings.capita +
+               I(Loan/Pop.inc), data = df2[-1], subset = index))
+  return (coef)
+}
+
+boot(df2, boot.fn, R = 500)
+```
+
+#### Bootstrap legend
+t1 = Intercept, t2 = Loan, t3 = Savings.unit, t4 = Savings.capita,
+t5 = I(Loan/Pop.inc)
+
+These coefficients would lead us to a more robust model.
+
+#### Model Inference
+
+Loan/Pop.inc and Savings.unit both have negative gradients and are inversely 
+proportional to Mortgage.Yield while the other variables have positive gradients
+and are directly proportional.
+
+```{r}
+lm.resid = resid(lm.fit)
+plot(fitted(lm.fit), lm.resid, xlab = "Fitted Values", 
+     ylab = "Residuals", main = "Residuals vs Fitted Values")
+abline(a = 0, b = 0, lty = 2)
+```
+
+The residuals vs Fitted values plot confirms our assumption that the relationship
+is linear
+
+```{r}
+qqnorm(y=lm.resid, main = "Residuals vs Normal Order Statistics",
+       xlab = "Normal Order Statistics", ylab = "Residuals")
+abline(a = 0, b = 0, lty = 28)
+```
+
+The above plot shows us that the residuals are mostly normally distributed.
+
+Overall we can say that Average Loan/Mortgage Ratio, Savings per unit built,
+Savings per capita and ((Average Loan/Mortgage)/Pop inc) ratio together explain
+a 87.39% variance in Mortgage Yield.
